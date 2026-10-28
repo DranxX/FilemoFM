@@ -1,0 +1,16 @@
+{
+  "sqlite": "3.45.1",
+  "passed": [
+    "legacy metadata survives schema migration",
+    "tag changes advance revision and durable outbox together",
+    "stale description writes cannot overwrite committed metadata",
+    "FTS trigger refresh and correlated BM25 query execute",
+    "reusing a deleted path cannot rebind stable references or descriptions",
+    "trash restore can reactivate the original identity with tags",
+    "root and parent filters preserve native bytes and exclude similarly named roots",
+    "interrupted cutover retains checkpoint and previous active pointer",
+    "tag deletion removes assignments through enforced foreign keys"
+  ],
+  "rust_compilation_run": false,
+  "scope": "SQL schema and invariants through Python SQLite; Rust adapters and bundled SQLite are unverified"
+}

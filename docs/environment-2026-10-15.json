@@ -1,0 +1,441 @@
+{
+  "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "rust": {
+    "ok": true,
+    "output": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8"
+  },
+  "cargo": {
+    "ok": true,
+    "output": "cargo 1.98.1 (797e8a9bc 2026-08-05)"
+  },
+  "toolchain": {
+    "ok": true,
+    "output": "stable-x86_64-unknown-linux-gnu (default)"
+  },
+  "targets": {
+    "ok": true,
+    "output": "wasm32-unknown-unknown\nwasm32-wasip2\nx86_64-pc-windows-msvc\nx86_64-unknown-linux-gnu"
+  },
+  "tools": {
+    "cc": true,
+    "c++": true,
+    "cmake": true,
+    "ninja": true,
+    "pkg-config": true,
+    "cl": false,
+    "clang-cl": false,
+    "lld-link": true,
+    "qdrant": false,
+    "llama-server": false,
+    "xdg-desktop-portal": false
+  },
+  "windows_sdk_configured": false,
+  "display_configured": true,
+  "wayland_configured": true,
+  "compilation_run": false,
+  "manifest": {
+    "name": "filemofm",
+    "edition": "2024",
+    "rust_version": "1.92"
+  },
+  "crates": {
+    "chrono": {
+      "version": "0.4.45",
+      "rust_version": "1.62.0"
+    },
+    "clipboard-rs": {
+      "version": "0.3.5",
+      "rust_version": "1.67.0"
+    },
+    "crossbeam-channel": {
+      "version": "0.5.16",
+      "rust_version": "1.60"
+    },
+    "directories": {
+      "version": "6.0.0",
+      "rust_version": null
+    },
+    "eframe": {
+      "version": "0.34.3",
+      "rust_version": "1.92"
+    },
+    "egui": {
+      "version": "0.34.3",
+      "rust_version": "1.92"
+    },
+    "egui-phosphor": {
+      "version": "0.12.0",
+      "rust_version": null
+    },
+    "egui_extras": {
+      "version": "0.34.3",
+      "rust_version": "1.92"
+    },
+    "fff-search": {
+      "version": "0.11.0",
+      "rust_version": null
+    },
+    "file-id": {
+      "version": "0.2.3",
+      "rust_version": "1.77"
+    },
+    "fs2": {
+      "version": "0.4.3",
+      "rust_version": null
+    },
+    "image": {
+      "version": "0.25.10",
+      "rust_version": "1.88.0"
+    },
+    "notify": {
+      "version": "7.0.0",
+      "rust_version": "1.72"
+    },
+    "open": {
+      "version": "5.3.6",
+      "rust_version": "1.62"
+    },
+    "parking_lot": {
+      "version": "0.12.5",
+      "rust_version": "1.71"
+    },
+    "pulldown-cmark": {
+      "version": "0.13.4",
+      "rust_version": "1.71.1"
+    },
+    "rayon": {
+      "version": "1.12.0",
+      "rust_version": "1.80"
+    },
+    "reqwest": {
+      "version": "0.12.28",
+      "rust_version": "1.64.0"
+    },
+    "rfd": {
+      "version": "0.15.4",
+      "rust_version": null
+    },
+    "rusqlite": {
+      "version": "0.31.0",
+      "rust_version": null
+    },
+    "rustix": {
+      "version": "1.1.4",
+      "rust_version": "1.63"
+    },
+    "serde": {
+      "version": "1.0.228",
+      "rust_version": "1.56"
+    },
+    "serde_json": {
+      "version": "1.0.150",
+      "rust_version": "1.71"
+    },
+    "sha2": {
+      "version": "0.10.9",
+      "rust_version": null
+    },
+    "thiserror": {
+      "version": "2.0.18",
+      "rust_version": "1.68"
+    },
+    "toml": {
+      "version": "0.8.23",
+      "rust_version": "1.66"
+    },
+    "tracing": {
+      "version": "0.1.44",
+      "rust_version": "1.65.0"
+    },
+    "tracing-appender": {
+      "version": "0.2.5",
+      "rust_version": "1.63.0"
+    },
+    "tracing-subscriber": {
+      "version": "0.3.23",
+      "rust_version": "1.65.0"
+    },
+    "trash": {
+      "version": "5.2.9",
+      "rust_version": "1.85.0"
+    },
+    "uuid": {
+      "version": "1.23.4",
+      "rust_version": "1.85.0"
+    },
+    "windows-sys": {
+      "version": "0.61.2",
+      "rust_version": "1.71"
+    }
+  },
+  "resolved_packages": 580,
+  "highest_declared_dependency_msrv": "1.92",
+  "duplicate_gui_versions": {
+    "egui": [
+      "0.34.3"
+    ],
+    "eframe": [
+      "0.34.3"
+    ],
+    "epaint": [
+      "0.34.3"
+    ]
+  },
+  "direct_features": {
+    "chrono": [
+      "alloc",
+      "clock",
+      "default",
+      "iana-time-zone",
+      "js-sys",
+      "now",
+      "oldtime",
+      "serde",
+      "std",
+      "wasm-bindgen",
+      "wasmbind",
+      "winapi",
+      "windows-link"
+    ],
+    "clipboard-rs": [
+      "wayland"
+    ],
+    "crossbeam-channel": [
+      "default",
+      "std"
+    ],
+    "directories": [],
+    "eframe": [
+      "default_fonts",
+      "glow",
+      "wayland",
+      "x11"
+    ],
+    "egui": [
+      "bytemuck",
+      "default",
+      "default_fonts"
+    ],
+    "egui-phosphor": [
+      "default",
+      "regular"
+    ],
+    "egui_extras": [
+      "default",
+      "image"
+    ],
+    "fff-search": [
+      "ripgrep"
+    ],
+    "file-id": [],
+    "fs2": [],
+    "image": [
+      "bmp",
+      "jpeg",
+      "png",
+      "tiff",
+      "webp"
+    ],
+    "notify": [
+      "default",
+      "fsevent-sys",
+      "macos_fsevent"
+    ],
+    "open": [],
+    "parking_lot": [
+      "default"
+    ],
+    "pulldown-cmark": [
+      "default",
+      "getopts",
+      "html",
+      "pulldown-cmark-escape"
+    ],
+    "rayon": [],
+    "reqwest": [
+      "__rustls",
+      "__rustls-ring",
+      "__tls",
+      "blocking",
+      "json",
+      "rustls-tls",
+      "rustls-tls-webpki-roots",
+      "rustls-tls-webpki-roots-no-provider"
+    ],
+    "rfd": [
+      "ashpd",
+      "async-std",
+      "default",
+      "pollster",
+      "urlencoding",
+      "xdg-portal"
+    ],
+    "rusqlite": [
+      "backup",
+      "bundled",
+      "modern_sqlite"
+    ],
+    "rustix": [
+      "alloc",
+      "default",
+      "event",
+      "fs",
+      "net",
+      "pipe",
+      "process",
+      "shm",
+      "std",
+      "system",
+      "time"
+    ],
+    "serde": [
+      "alloc",
+      "default",
+      "derive",
+      "serde_derive",
+      "std"
+    ],
+    "serde_json": [
+      "default",
+      "std"
+    ],
+    "sha2": [
+      "default",
+      "std"
+    ],
+    "thiserror": [
+      "default",
+      "std"
+    ],
+    "toml": [
+      "default",
+      "display",
+      "parse"
+    ],
+    "tracing": [
+      "attributes",
+      "default",
+      "log",
+      "std",
+      "tracing-attributes"
+    ],
+    "tracing-appender": [],
+    "tracing-subscriber": [
+      "alloc",
+      "ansi",
+      "default",
+      "env-filter",
+      "fmt",
+      "matchers",
+      "nu-ansi-term",
+      "once_cell",
+      "registry",
+      "sharded-slab",
+      "smallvec",
+      "std",
+      "thread_local",
+      "tracing",
+      "tracing-log"
+    ],
+    "trash": [
+      "chrono",
+      "coinit_apartmentthreaded",
+      "default"
+    ],
+    "uuid": [
+      "default",
+      "rng",
+      "serde",
+      "sha1",
+      "std",
+      "v4",
+      "v5"
+    ],
+    "windows-sys": [
+      "Wdk",
+      "Wdk_Foundation",
+      "Wdk_Storage",
+      "Wdk_Storage_FileSystem",
+      "Wdk_System",
+      "Wdk_System_IO",
+      "Win32",
+      "Win32_Foundation",
+      "Win32_Globalization",
+      "Win32_NetworkManagement",
+      "Win32_NetworkManagement_IpHelper",
+      "Win32_Networking",
+      "Win32_Networking_WinSock",
+      "Win32_Security",
+      "Win32_Security_Authorization",
+      "Win32_Storage",
+      "Win32_Storage_FileSystem",
+      "Win32_System",
+      "Win32_System_Com",
+      "Win32_System_Console",
+      "Win32_System_Diagnostics",
+      "Win32_System_Diagnostics_Debug",
+      "Win32_System_IO",
+      "Win32_System_LibraryLoader",
+      "Win32_System_Memory",
+      "Win32_System_Pipes",
+      "Win32_System_SystemInformation",
+      "Win32_System_SystemServices",
+      "Win32_System_Threading",
+      "Win32_System_WindowsProgramming",
+      "Win32_UI",
+      "Win32_UI_Input",
+      "Win32_UI_Input_KeyboardAndMouse",
+      "Win32_UI_Shell",
+      "Win32_UI_WindowsAndMessaging",
+      "default"
+    ]
+  },
+  "target_dependency_resolution": {
+    "x86_64-unknown-linux-gnu": {
+      "ok": true,
+      "output": "filemofm v0.1.0 (<project-root>)\nchrono v0.4.45\nclipboard-rs v0.3.5\ncrossbeam-channel v0.5.16\ndirectories v6.0.0\neframe v0.34.3\negui v0.34.3\negui-phosphor v0.12.0\negui_extras v0.34.3\nfff-search v0.11.0\nfile-id v0.2.3\nfs2 v0.4.3\nimage v0.25.10\nnotify v7.0.0\nopen v5.3.6\nparking_lot v0.12.5\npulldown-cmark v0.13.4\nrayon v1.12.0\nreqwest v0.12.28\nrfd v0.15.4\nrusqlite v0.31.0\nrustix v1.1.4\nserde v1.0.228\nserde_json v1.0.150\nsha2 v0.10.9\nthiserror v2.0.18\ntoml v0.8.23\ntracing v0.1.44\ntracing-appender v0.2.5\ntracing-subscriber v0.3.23\ntrash v5.2.9\nuuid v1.23.4"
+    },
+    "x86_64-pc-windows-msvc": {
+      "ok": true,
+      "output": "filemofm v0.1.0 (<project-root>)\nchrono v0.4.45\nclipboard-rs v0.3.5\ncrossbeam-channel v0.5.16\ndirectories v6.0.0\neframe v0.34.3\negui v0.34.3\negui-phosphor v0.12.0\negui_extras v0.34.3\nfff-search v0.11.0\nfile-id v0.2.3\nfs2 v0.4.3\nimage v0.25.10\nnotify v7.0.0\nopen v5.3.6\nparking_lot v0.12.5\npulldown-cmark v0.13.4\nrayon v1.12.0\nreqwest v0.12.28\nrfd v0.15.4\nrusqlite v0.31.0\nserde v1.0.228\nserde_json v1.0.150\nsha2 v0.10.9\nthiserror v2.0.18\ntoml v0.8.23\ntracing v0.1.44\ntracing-appender v0.2.5\ntracing-subscriber v0.3.23\ntrash v5.2.9\nuuid v1.23.4\nwindows-sys v0.61.2"
+    }
+  },
+  "pkg_config": {
+    "x11": {
+      "ok": true,
+      "output": "1.8.7"
+    },
+    "xcb": {
+      "ok": true,
+      "output": "1.15"
+    },
+    "xkbcommon": {
+      "ok": false,
+      "output": "Package xkbcommon was not found in the pkg-config search path.\nPerhaps you should add the directory containing `xkbcommon.pc'\nto the PKG_CONFIG_PATH environment variable\nPackage 'xkbcommon', required by 'virtual:world', not found"
+    },
+    "wayland-client": {
+      "ok": true,
+      "output": "1.22.0"
+    },
+    "glib-2.0": {
+      "ok": true,
+      "output": "2.80.0"
+    },
+    "gtk+-3.0": {
+      "ok": false,
+      "output": "Package gtk+-3.0 was not found in the pkg-config search path.\nPerhaps you should add the directory containing `gtk+-3.0.pc'\nto the PKG_CONFIG_PATH environment variable\nPackage 'gtk+-3.0', required by 'virtual:world', not found"
+    },
+    "dbus-1": {
+      "ok": false,
+      "output": "Package dbus-1 was not found in the pkg-config search path.\nPerhaps you should add the directory containing `dbus-1.pc'\nto the PKG_CONFIG_PATH environment variable\nPackage 'dbus-1', required by 'virtual:world', not found"
+    }
+  },
+  "runtime_libraries": {
+    "libxkbcommon.so.0": true,
+    "libX11.so.6": true,
+    "libwayland-client.so.0": true,
+    "libEGL.so.1": true,
+    "libGL.so.1": true
+  }
+}
