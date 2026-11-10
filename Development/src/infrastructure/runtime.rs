@@ -501,6 +501,9 @@ impl VectorDataset for QdrantDataset {
 pub struct LlamaEncoderFactory {
     paths: RuntimePaths,
 }
+/// Inputs per llama-server embeddings request; bounded so one batched request cannot
+/// outlive the HTTP timeout.
+const EMBED_GROUP_SIZE: usize = 32;
 impl LlamaEncoderFactory {
     pub fn new(paths: RuntimePaths) -> Self {
         Self { paths }
@@ -613,40 +616,90 @@ impl EncoderFactory for LlamaEncoderFactory {
         Ok(Box::new(encoder))
     }
 }
-impl TextEncoder for LlamaEncoder {
-    fn embed(&mut self, text: &str, is_query: bool) -> Result<Vec<f32>, String> {
-        if text.len() > MAX_DESCRIPTION_BYTES {
+impl LlamaEncoder {
+    /// One inference request for a group of inputs; llama-server embeds the whole array in
+    /// a single call.
+    fn embed_group(&mut self, texts: &[String], is_query: bool) -> Result<Vec<Vec<f32>>, String> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+        if texts.iter().any(|text| text.len() > MAX_DESCRIPTION_BYTES) {
             return Err("Embedding text is too large".into());
         }
-        let input = if is_query {
-            format!("{QUERY_INSTRUCTION}{text}")
+        let inputs = if is_query {
+            texts
+                .iter()
+                .map(|text| format!("{QUERY_INSTRUCTION}{text}"))
+                .collect::<Vec<_>>()
         } else {
-            text.into()
+            texts.to_vec()
         };
         let response = json_response(
             self.client
                 .post(format!("{}/v1/embeddings", self.endpoint))
                 .bearer_auth(&self.token)
-                .json(&json!({"input":[input],"encoding_format":"float"}))
+                .json(&json!({"input":inputs,"encoding_format":"float"}))
                 .send()
                 .map_err(|_| "Model inference failed")?,
         )?;
-        let vector = response["data"][0]["embedding"]
+        let data = response["data"]
             .as_array()
-            .ok_or("Embedding output is invalid")?
-            .iter()
-            .map(|value| {
-                value
-                    .as_f64()
-                    .filter(|value| value.is_finite())
-                    .map(|value| value as f32)
-                    .ok_or("Embedding value is invalid".to_string())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        if vector.len() != DEFAULT_DIMENSIONS || vector.iter().any(|value| !value.is_finite()) {
-            return Err("Embedding dimension or values are invalid".into());
+            .ok_or("Embedding output is invalid")?;
+        if data.len() != inputs.len() {
+            return Err("Embedding count does not match the request".into());
         }
-        Ok(vector)
+        let mut vectors = data
+            .iter()
+            .map(|entry| {
+                let index = entry["index"].as_u64().unwrap_or_default() as usize;
+                let vector = entry["embedding"]
+                    .as_array()
+                    .ok_or("Embedding output is invalid")?
+                    .iter()
+                    .map(|value| {
+                        value
+                            .as_f64()
+                            .filter(|value| value.is_finite())
+                            .map(|value| value as f32)
+                            .ok_or("Embedding value is invalid".to_string())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok((index, vector))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        // Order by the response index when the server provides one; a server that omits
+        // indices is taken to return entries in request order.
+        if data
+            .iter()
+            .any(|entry| entry.get("index").is_some_and(|value| value.is_u64()))
+        {
+            vectors.sort_by_key(|(index, _)| *index);
+            if vectors
+                .iter()
+                .enumerate()
+                .any(|(position, (index, _))| position != *index)
+            {
+                return Err("Embedding order is invalid".into());
+            }
+        }
+        for (_, vector) in &vectors {
+            if vector.len() != DEFAULT_DIMENSIONS || vector.iter().any(|value| !value.is_finite()) {
+                return Err("Embedding dimension or values are invalid".into());
+            }
+        }
+        Ok(vectors.into_iter().map(|(_, vector)| vector).collect())
+    }
+}
+impl TextEncoder for LlamaEncoder {
+    fn embed(&mut self, text: &str, is_query: bool) -> Result<Vec<f32>, String> {
+        Ok(self.embed_group(&[text.into()], is_query)?.remove(0))
+    }
+    fn embed_batch(&mut self, texts: &[String], is_query: bool) -> Result<Vec<Vec<f32>>, String> {
+        let mut vectors = Vec::with_capacity(texts.len());
+        for group in texts.chunks(EMBED_GROUP_SIZE) {
+            vectors.extend(self.embed_group(group, is_query)?);
+        }
+        Ok(vectors)
     }
     fn fingerprint(&self) -> String {
         self.fingerprint.clone()

@@ -12,11 +12,13 @@ This guide records the architecture and behavior traced in the current source. T
 
 ## Project overview
 
+- **Workspace layout:** the application lives in `Development/` (its `Cargo.toml`, `src/`, `scripts/`, and `docs/`). `Reference/` holds vendored third-party projects kept for study — `FileSSH` (TUI SFTP browser with a parallel directory traversal) and `mango-finder` (Tauri semantic file search). Nothing under `Reference/` is built, indexed, or shipped; treat it as read-only algorithm reference material.
 - **Application:** FilemoFM, a portable Rust desktop file manager built with egui/eframe.
 - **Toolchain:** Rust edition 2024; `Cargo.toml` declares Rust 1.92 or newer.
 - **Targets:** Windows x86_64 MSVC and Linux x86_64 GNU. Linux builds enable both X11 and Wayland support.
 - **Metadata authority:** SQLite. Qdrant and the optional name index are projections or search helpers, not sources of truth.
-- **Composition roots:** `src/main.rs` wires startup dependencies; `src/ui/app.rs` wires GUI services.
+- **Composition roots:** `Development/src/main.rs` wires startup dependencies; `Development/src/ui/app.rs` wires GUI services.
+- Paths in the source map below are relative to `Development/`.
 
 ## Source map
 
@@ -35,8 +37,8 @@ This guide records the architecture and behavior traced in the current source. T
 | `src/infrastructure/clipboard.rs` | OS file clipboard integration. |
 | `src/infrastructure/name_index.rs` | Optional `fff-search` adapter for file-name discovery. |
 | `src/infrastructure/model_store.rs` | Model artifact review, download, and verification. |
-| `src/infrastructure/runtime.rs` | Local Qdrant and `llama-server` process lifecycle and adapters. |
-| `src/services/scanner.rs` | Current-folder scan, watcher, and bounded folder-size work. |
+| `src/infrastructure/runtime.rs` | Local Qdrant and `llama-server` process lifecycle, single and batched embedding requests, and vector adapters. |
+| `src/services/scanner.rs` | Current-folder scan, watcher, and the bounded parallel folder-size walk. |
 | `src/services/search.rs` | Background keyword, semantic, and hybrid search orchestration. |
 | `src/services/operations.rs` | Serialized filesystem operations, transfer logic, app trash, and crash recovery. |
 | `src/services/vector.rs` | Embedding, Qdrant synchronization, semantic search, rebuild, and rollback. |
@@ -70,12 +72,12 @@ The database lock prevents two processes from using the same portable data direc
 
 Navigation validates or canonicalizes the requested location, resolves a file path to its parent folder, updates history, and requests a folder snapshot. `FileScannerService` reads the immediate children of one folder and upserts metadata in batches. It marks previously indexed children missing only if the directory scan had no entry errors. The optional filesystem watcher watches only the current folder and debounces changes.
 
-Folder-size measurement is a separate recursive worker. It has entry and time limits, does not follow symlinks, and can return a partial result. Keep it separate from the shallow folder listing.
+Folder-size measurement is a separate worker. A single folder is measured by a parallel work-stealing walk (per-worker LIFO `crossbeam-deque` deques, round-robin batch stealing, refcounted termination): wide subtrees spread across up to `SIZE_WALK_THREADS` workers while depth stays memory-bounded. The walk has entry and time limits, never follows symlinks, reparse points, or other filesystems, and returns a partial result when anything is skipped, unreadable, or a budget fires. Termination is exact: `pending` counts every live work item, children are counted before their parent is released, and every popped item decrements the counter exactly once — a `read_dir` failure must never skip that release or the walk livelocks. Keep measurement separate from the shallow folder listing.
 
 ### Search
 
 1. The UI debounces input and calls `parse_query()` to validate terms, filters, scope, roots, and result limits.
-2. Keyword search runs against SQLite metadata and FTS. Search terms cover names, paths, and descriptions; file contents are not part of the index.
+2. Keyword search runs against SQLite metadata and FTS. Each term is a `LIKE %term%` disjunction over name, path, and description plus a quoted FTS5 prefix query (`"term"*`), so partial terms still score through bm25; the bm25 ranking weights columns as name 6, path 2, description 1. Search terms cover names, paths, and descriptions; file contents are not part of the index.
 3. In selected-root scope, the optional `fff-search` adapter can discover matching names on disk. Discovered paths are inspected and rehydrated into SQLite before metadata filters are applied. If the adapter fails, the service reports that it is showing metadata results only.
 4. Semantic search asks the vector worker to embed the query and search Qdrant. The semantic document contains the file name, path, tags, and plain-text description.
 5. Hybrid search combines keyword and semantic rankings with reciprocal rank fusion. If vector search fails, it returns keyword results with a diagnostic.
@@ -95,7 +97,7 @@ Agent-proposed writes use the same approval path and filesystem operation queue 
 
 SQLite owns stable file IDs, native path keys, tags, descriptions, references, revisions, missing/tombstone state, folder-size cache, operation journal, and vector outbox. SQLite triggers update FTS and queue vector synchronization when indexed metadata changes. File operations update paths in the repository after filesystem commits.
 
-Qdrant is a rebuildable projection. The vector worker reads pending outbox revisions, verifies each file revision before writing, and records projection hashes to skip unchanged documents. Rebuilds use a candidate collection and checkpoint; the active manifest changes only after catch-up and verification. Keep the previous active dataset available for rollback.
+Qdrant is a rebuildable projection. The vector worker reads pending outbox revisions, verifies each file revision before writing, and records projection hashes to skip unchanged documents. The hash covers the document text plus `CHUNKING_VERSION`, so a changed chunking algorithm re-embeds files the next time a revision of theirs synchronizes; a full propagation still requires a rebuild. Documents are packed into chunks at paragraph, line, sentence, and word boundaries (never mid-word except for an oversized single word), and each file's chunks are embedded through `TextEncoder::embed_batch` in bounded llama-server request groups (`EMBED_GROUP_SIZE`). Rebuilds use a candidate collection and checkpoint; the active manifest changes only after catch-up and verification. Keep the previous active dataset available for rollback.
 
 ### Agent and MCP
 
@@ -118,6 +120,7 @@ Remote chat endpoints require HTTPS, except explicitly enabled unauthenticated l
 - **Stale background results are ignored.** Retain generation checks and cancellation behavior when adding worker events.
 - **Scope and permission filters apply before data leaves a boundary.** Recheck Agent policy around reads and after approval; do not rely on the chat prompt to enforce access.
 - **Vector state follows metadata revisions.** Keep outbox acknowledgment, revision verification, deletion handling, and rebuild cutover consistent.
+- **Parallel size walks terminate exactly.** Every popped work item must release `pending` exactly once, including on unreadable directories and budget aborts; a leaked count livelocks the workers, and a miscounted release can silently drop a subtree from a `Complete` result.
 - **Portable data stays beside the executable.** Include any new persistent directory in path setup, validation, packaging, and documentation.
 
 ## Change guidelines
@@ -133,7 +136,7 @@ Remote chat endpoints require HTTPS, except explicitly enabled unauthenticated l
 
 ## Build and verification commands
 
-Run the smallest relevant checks for the change, then report what was and was not verified. Do not claim a test or platform build that was not run.
+Run the smallest relevant checks for the change, then report what was and was not verified. Do not claim a test or platform build that was not run. All commands run from `Development/`.
 
 ```sh
 cargo fmt --all -- --check
@@ -151,4 +154,4 @@ python3 scripts/verify-storage.py
 
 `check-environment.py` reports local toolchain and target availability. `verify-storage.py` exercises schema and selected SQL invariants with Python's SQLite module; it does not compile Rust or verify the bundled SQLite adapter. `scripts/package.py` packages an existing Linux or Windows x64 binary into a new directory; it does not build the application or download runtimes and models.
 
-Important behavior tests live beside their modules, including query parsing in `src/shared/query.rs`, operation helpers in `src/services/operations.rs`, and repository behavior in `src/infrastructure/sqlite.rs`. Platform-sensitive filesystem behavior still requires verification on the target OS.
+Important behavior tests live beside their modules, including query parsing in `src/shared/query.rs`, operation helpers in `src/services/operations.rs`, repository behavior in `src/infrastructure/sqlite.rs`, the parallel size walk in `src/services/scanner.rs`, and document chunking in `src/services/vector.rs`. Platform-sensitive filesystem behavior still requires verification on the target OS.

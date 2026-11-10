@@ -139,6 +139,14 @@ pub trait ModelRepository: Send + Sync {
 
 pub trait TextEncoder: Send {
     fn embed(&mut self, text: &str, is_query: bool) -> Result<Vec<f32>, String>;
+    /// Embeds several texts with as few inference requests as possible. The default falls
+    /// back to one `embed` call per text; implementations bound each request themselves.
+    fn embed_batch(&mut self, texts: &[String], is_query: bool) -> Result<Vec<Vec<f32>>, String> {
+        texts
+            .iter()
+            .map(|text| self.embed(text, is_query))
+            .collect()
+    }
     fn fingerprint(&self) -> String;
 }
 

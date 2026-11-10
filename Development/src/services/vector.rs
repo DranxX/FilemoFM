@@ -405,12 +405,8 @@ impl VectorWorker {
         ))
     }
     fn chunks(text: &str, config: &EmbeddingConfig) -> Vec<String> {
-        let size = (config.context_tokens / 4).clamp(64, 512);
-        let chars = text.chars().collect::<Vec<_>>();
-        chars
-            .chunks(size)
-            .map(|chunk| chunk.iter().collect())
-            .collect()
+        let max = (config.context_tokens / 4).clamp(64, 512);
+        pack_units(split_units(text, max), max)
     }
     fn write_file(
         &mut self,
@@ -420,7 +416,7 @@ impl VectorWorker {
     ) -> Result<usize, String> {
         self.load_encoder()?;
         let document = self.document(file)?;
-        let hash = format!("{:x}", Sha256::digest(document.as_bytes()));
+        let hash = projection_hash(&document);
         let chunks = Self::chunks(&document, &self.config.embedding);
         self.repository
             .clear_projection(name, Some(&file.id))
@@ -429,17 +425,19 @@ impl VectorWorker {
             .as_mut()
             .ok_or("Qdrant is unavailable")?
             .delete(name, &file.id)?;
-        for (index, text) in chunks.iter().enumerate() {
+        // One inference request per group of chunks; each point still gets its own
+        // revision check immediately before the write.
+        let vectors = self
+            .encoder
+            .as_mut()
+            .ok_or("Model is not loaded")?
+            .embed_batch(&chunks, false)?;
+        self.last_inference = Instant::now();
+        for (index, vector) in vectors.iter().enumerate() {
             if self.cancellation.load(Ordering::Acquire) {
                 return Err("Synchronization paused".into());
             }
-            let vector = self
-                .encoder
-                .as_mut()
-                .ok_or("Model is not loaded")?
-                .embed(text, false)?;
-            let vector = Self::normalized(vector, dimension)?;
-            self.last_inference = Instant::now();
+            let vector = Self::normalized(vector.clone(), dimension)?;
             if self
                 .repository
                 .get_file(&file.id)
@@ -491,7 +489,7 @@ impl VectorWorker {
                 // Counted as a retry so a stale row is parked instead of spinning the worker.
                 return Err("Metadata changed; the job was rescheduled".into());
             }
-            let hash = format!("{:x}", Sha256::digest(self.document(&file)?.as_bytes()));
+            let hash = projection_hash(&self.document(&file)?);
             if self
                 .repository
                 .projection(&manifest.active, &file.id)
@@ -817,5 +815,181 @@ impl VectorWorker {
             }
         }
         result
+    }
+}
+
+/// The projection hash covers the document text and the chunking version, so a changed
+/// chunking algorithm re-embeds a file the next time one of its revisions synchronizes.
+fn projection_hash(document: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(CHUNKING_VERSION.as_bytes());
+    hasher.update(b"\n");
+    hasher.update(document.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+/// Splits `text` into units of at most `max` characters, preferring paragraph breaks, then
+/// line breaks, then sentence enders, then whitespace; only an oversized single word is
+/// hard-split. Separators stay attached, so the units still concatenate to `text`.
+fn split_units(text: &str, max: usize) -> Vec<String> {
+    if text.is_empty() {
+        return Vec::new();
+    }
+    if text.chars().count() <= max {
+        return vec![text.to_string()];
+    }
+    for separator in ["\n\n", "\n"] {
+        if text.contains(separator) {
+            let mut units = Vec::new();
+            for part in text.split_inclusive(separator) {
+                // The separator is stripped before recursing and reattached to the last
+                // sub-unit only when this part actually carried it, so splitting never
+                // loses or duplicates a separator.
+                let (body, suffix) = match part.strip_suffix(separator) {
+                    Some(body) => (body, true),
+                    None => (part, false),
+                };
+                if body.is_empty() {
+                    units.push(separator.to_string());
+                    continue;
+                }
+                let mut sub = split_units(body, max);
+                match sub.last_mut() {
+                    Some(last) if suffix => last.push_str(separator),
+                    Some(_) => {}
+                    None => units.push(separator.to_string()),
+                }
+                units.extend(sub);
+            }
+            return units;
+        }
+    }
+    let sentences = split_sentences(text);
+    if sentences.len() > 1 {
+        return sentences
+            .into_iter()
+            .flat_map(|sentence| split_units(&sentence, max))
+            .collect();
+    }
+    if text.contains(' ') {
+        return text
+            .split_inclusive(' ')
+            .flat_map(|word| split_units(word, max))
+            .collect();
+    }
+    text.chars()
+        .collect::<Vec<_>>()
+        .chunks(max)
+        .map(|chunk| chunk.iter().collect())
+        .collect()
+}
+
+/// Cuts after sentence enders. Latin enders need trailing whitespace so abbreviations like
+/// "e.g." or version numbers do not break mid-token; CJK enders never use spaces and cut
+/// unconditionally.
+fn split_sentences(text: &str) -> Vec<String> {
+    let mut sentences = Vec::new();
+    let mut current = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        current.push(ch);
+        let hard = matches!(ch, '。' | '！' | '？' | '；');
+        let soft = matches!(ch, '.' | '!' | '?' | ';')
+            && chars.peek().is_none_or(|next| next.is_whitespace());
+        if hard || soft {
+            sentences.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        sentences.push(current);
+    }
+    sentences
+}
+
+/// Concatenates units into chunks of at most `max` characters without ever splitting one;
+/// `split_units` guarantees every unit fits, so no chunk is ever empty here.
+fn pack_units(units: Vec<String>, max: usize) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    for unit in units {
+        if !current.is_empty() && current.chars().count() + unit.chars().count() > max {
+            chunks.push(std::mem::take(&mut current));
+        }
+        current.push_str(&unit);
+    }
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+    chunks
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chunk_config(context_tokens: usize) -> EmbeddingConfig {
+        EmbeddingConfig {
+            repo_url: String::new(),
+            dimension: DEFAULT_DIMENSIONS,
+            idle_seconds: 1,
+            threads: 1,
+            context_tokens,
+        }
+    }
+
+    #[test]
+    fn short_documents_stay_whole() {
+        let text = "first paragraph\n\nsecond paragraph with lines\nand more\n\nthird";
+        let chunks = VectorWorker::chunks(text, &chunk_config(2048));
+        assert_eq!(chunks, vec![text]);
+    }
+
+    #[test]
+    fn long_text_splits_at_line_boundaries() {
+        let line = "word ".repeat(60);
+        let text = format!("{line}\n{line}\n{line}");
+        let chunks = VectorWorker::chunks(&text, &chunk_config(1024));
+        assert!(chunks.len() > 1);
+        assert!(chunks.iter().all(|chunk| chunk.chars().count() <= 256));
+        assert_eq!(chunks.concat(), text);
+        assert!(
+            chunks
+                .iter()
+                .enumerate()
+                .all(|(index, chunk)| chunk.ends_with(' ')
+                    || chunk.ends_with('\n')
+                    || index + 1 == chunks.len())
+        );
+    }
+
+    #[test]
+    fn cjk_text_splits_at_sentence_enders() {
+        let text = "这是一句测试句子。".repeat(40);
+        let chunks = VectorWorker::chunks(&text, &chunk_config(256));
+        assert!(chunks.len() > 1);
+        assert!(chunks.iter().all(|chunk| chunk.chars().count() <= 64));
+        assert_eq!(chunks.concat(), text);
+        assert!(chunks.iter().all(|chunk| chunk.ends_with('。')));
+    }
+
+    #[test]
+    fn oversized_single_word_is_hard_split() {
+        let text = "x".repeat(1000);
+        let chunks = VectorWorker::chunks(&text, &chunk_config(2048));
+        assert!(chunks.iter().all(|chunk| chunk.chars().count() <= 512));
+        assert_eq!(chunks.concat(), text);
+    }
+
+    #[test]
+    fn projection_hash_follows_the_chunking_version() {
+        let document = "report.txt\n/docs/report.txt\n\nnotes";
+        assert_ne!(
+            projection_hash(document),
+            Sha256::digest(document.as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        );
+        assert_eq!(projection_hash(document), projection_hash(document));
     }
 }

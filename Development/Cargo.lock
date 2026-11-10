@@ -1315,6 +1315,7 @@ dependencies = [
  "chrono",
  "clipboard-rs",
  "crossbeam-channel",
+ "crossbeam-deque",
  "directories",
  "eframe",
  "egui",

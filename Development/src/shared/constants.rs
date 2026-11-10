@@ -29,6 +29,7 @@ pub const LEGACY_SIZE_ENTRY_BUDGET: usize = 100_000;
 pub const SIZE_TIME_BUDGET_SECS: u64 = 60;
 pub const LEGACY_SIZE_TIME_BUDGET_SECS: u64 = 10;
 pub const SIZE_WORKERS: usize = 4;
+pub const SIZE_WALK_THREADS: usize = 4;
 pub const SIZE_CACHE_TTL_SECS: i64 = 300;
 pub const SEARCH_DEBOUNCE_MS: u64 = 300;
 pub const WATCHER_DEBOUNCE_MS: u64 = 500;
@@ -39,6 +40,9 @@ pub const DEFAULT_ARTIFACT_REPO: &str = "Qwen/Qwen3-Embedding-0.6B-GGUF";
 pub const DEFAULT_ARTIFACT_FILE: &str = "Qwen3-Embedding-0.6B-f16.gguf";
 pub const QUERY_INSTRUCTION: &str =
     "Instruct: Retrieve files relevant to the user's query\nQuery: ";
+/// Bumped when the chunking algorithm changes, so projection hashes no longer match and the
+/// next synchronization re-embeds the touched files with the new chunk boundaries.
+pub const CHUNKING_VERSION: &str = "2";
 pub const RRF_OFFSET: f32 = 60.0;
 pub const MAX_HTTP_BYTES: u64 = 8 * 1024 * 1024;
 pub const MAX_MODEL_BYTES: u64 = 4 * 1024 * 1024 * 1024;

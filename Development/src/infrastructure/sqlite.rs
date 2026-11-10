@@ -516,13 +516,16 @@ impl FileRepository for SqliteStorage {
                 .replace('%', "\\%")
                 .replace('_', "\\_");
             let parameter = bind(Value::Text(format!("%{literal}%")));
-            let token = format!("\"{}\"", term.replace('"', "\"\""));
+            // A quoted prefix query: the asterisk stays outside the phrase, so operator
+            // characters inside the term can never turn into FTS5 syntax. Prefix matching
+            // lets bm25 rank partial terms ("rep" → "report") instead of only exact tokens.
+            let token = format!("\"{}\"*", term.replace('"', "\"\""));
             let token_parameter = bind(Value::Text(token));
             clauses.push(format!("(f.name LIKE {parameter} ESCAPE '\\' OR f.path LIKE {parameter} ESCAPE '\\' OR f.description LIKE {parameter} ESCAPE '\\' OR f.rowid IN(SELECT rowid FROM file_fts WHERE file_fts MATCH {token_parameter}))"));
             if !fts.is_empty() {
                 fts.push_str(" AND ");
             }
-            fts.push_str(&format!("\"{}\"", term.replace('"', "\"\"")));
+            fts.push_str(&format!("\"{}\"*", term.replace('"', "\"\"")));
         }
         for filter in &query.filters {
             match filter {
@@ -550,11 +553,13 @@ impl FileRepository for SqliteStorage {
         }
         // A bare integer in ORDER BY is a column index, so "ORDER BY 0" is an SQL error; a
         // filter-only query (`tag:work`, `type:xlsx`) simply orders by name.
+        // bm25 column weights follow the table columns (name, path, description): a name
+        // match outranks the same match found in the path or the description.
         let ranking = if fts.is_empty() {
             "f.is_directory DESC".to_string()
         } else {
             format!(
-                "coalesce((SELECT bm25(file_fts) FROM file_fts WHERE rowid=f.rowid AND file_fts MATCH {}),0)",
+                "coalesce((SELECT bm25(file_fts,6.0,2.0,1.0) FROM file_fts WHERE rowid=f.rowid AND file_fts MATCH {}),0)",
                 bind(Value::Text(fts))
             )
         };
@@ -1043,6 +1048,36 @@ mod tests {
         let open = storage.unfinished_operations().unwrap();
         assert_eq!(open.len(), 1);
         assert_eq!(open[0].3, "move:committed");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn keyword_search_ranks_name_matches_above_description_matches() {
+        let (storage, root) = storage();
+        let named = root.join("q1/report-alpha.txt");
+        let mut files = vec![item(&root.join("q1/zzz.txt"), false), item(&named, false)];
+        storage.upsert_files(&mut files).unwrap();
+        // Descriptions are written through update_description, not the scan upsert.
+        storage
+            .update_description(&files[0].id, files[0].revision, "annual report summary")
+            .unwrap();
+
+        // The prefix query "rep" matches the token "report" in both files; the bm25 column
+        // weights must rank the name match above the description-only match.
+        let query = SearchQuery {
+            text: "rep".into(),
+            filters: Vec::new(),
+            ids: Vec::new(),
+            scope: SearchScope::IndexedFiles,
+            directory: root.clone(),
+            roots: Vec::new(),
+            limit: 10,
+            offset: 0,
+        };
+        let results = storage.search_keyword(&query).unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].file.name, "report-alpha.txt");
+        assert!(results[0].score > results[1].score);
         let _ = std::fs::remove_dir_all(root);
     }
 }
